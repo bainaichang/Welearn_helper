@@ -41,40 +41,31 @@ def generate_cipher_text(password):
 
 # 登录
 def login(user, pwd):
-    while True:
-        try:
-            response = requests.get(
-                "https://welearn.sflep.com/user/prelogin.aspx?loginret=http://welearn.sflep.com/user/loginredirect.aspx")
-            code_challenge = response.url.split("%26")[4].split("%3D")[1]
-            state = response.url.split("%26")[6].split("%3D")[1]
-            rturl = f"/connect/authorize/callback?client_id=welearn_web&redirect_uri=https%3A%2F%2Fwelearn.sflep.com%2Fsignin-sflep&response_type=code&scope=openid%20profile%20email%20phone%20address&code_challenge={code_challenge}&code_challenge_method=S256&state={state}&x-client-SKU=ID_NET472&x-client-ver=6.32.1.0"
-            # 获取回调url
-            print("登录中...", end='')
-            while True:
-                msg = generate_cipher_text(pwd)
-
-                form_data = {
-                    "rturl": rturl,
-                    "account": user,
-                    "pwd": str(msg[0]),
-                    "ts": str(msg[1])
-                }
-                if("帐号或密码错误" in session.post("https://sso.sflep.com/idsvr/account/login", data=form_data).text):
-                    print("\n帐号或密码错误！")
-                    exit(0)
-                session.get(
-                    "https://welearn.sflep.com/user/prelogin.aspx?loginret=http://welearn.sflep.com/user/loginredirect.aspx")
-                # 登录
-
-                response = session.get("https://welearn.sflep.com/student/index.aspx")
-                if "WE Learn 随行课堂" in response.text:
-                    print(f"\n登录成功！")
-                    return session
-                print(".", end='')
-        except:
-            print("错误返回,登录失败！")
+    try:
+        response = requests.get(
+            "https://welearn.sflep.com/user/prelogin.aspx?loginret=http://welearn.sflep.com/user/loginredirect.aspx",
+            allow_redirects=False)
+        rturl = response.headers['Location'].replace(
+            'https://sso.sflep.com/idsvr', '')
+        # 获取回调url
+        print("登录中...", end='')
+        form_data = {
+            "rturl": rturl,
+            "account": user,
+            "pwd": pwd
+        }
+        session.post("https://sso.sflep.com/idsvr/account/login", data=form_data)
+        url = 'https://sso.sflep.com/idsvr' + rturl
+        res = session.get(url)
+        print(res.text)
+        if "localStorage.setItem('authToken'" in res.text:
+            print("登录成功!!")
+        else:
+            input("登录失败!!")
             exit(0)
-# ---------以上修改---------------------
+    except:
+        print("错误返回,登录失败！")
+        exit(0)
 
 def welearn_accuracy_run():
     user = input("请输入用户名=>")

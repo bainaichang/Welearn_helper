@@ -6,7 +6,6 @@ import time
 from textwrap import dedent
 from typing import Any, Dict, List, Union
 from bs4 import BeautifulSoup
-import base64
 
 import requests
 
@@ -32,64 +31,40 @@ print("         更新维护者github https://github.com/YZBRH/Welearn_helper/")
 print("                              BR更新--2024.12.1")
 print("***************************************************\n")
 
+
 # ---------以下修改---------------------
 def to_hex_byte_array(byte_array):
     return ''.join([f'{byte:02x}' for byte in byte_array])
 
-
-def generate_cipher_text(password):
-    # 获取当前时间戳（毫秒级）
-    T0 = int(round(time.time() * 1000)) # 不清楚原因，网站和本地间有延迟，需手动补齐延迟
-    # 模拟TextEncoder.encode
-    P = password.encode('utf-8')
-    V = (T0 >> 16) & 0xFF
-    for byte in P:
-        V ^= byte
-    remainder = V % 100
-    T1 = int((T0 / 100) * 100 + remainder)
-    P1 = to_hex_byte_array(P)
-    S = f"{T1}*" + P1
-    S_encoded = S.encode('utf-8')
-    # 模拟btoa
-    E = base64.b64encode(S_encoded).decode('utf-8')
-    return [E, T1]
-
-
 # 登录
 def login(user, pwd):
-    while True:
-        try:
-            response = requests.get(
-                "https://welearn.sflep.com/user/prelogin.aspx?loginret=http://welearn.sflep.com/user/loginredirect.aspx")
-            code_challenge = response.url.split("%26")[4].split("%3D")[1]
-            state = response.url.split("%26")[6].split("%3D")[1]
-            rturl = f"/connect/authorize/callback?client_id=welearn_web&redirect_uri=https%3A%2F%2Fwelearn.sflep.com%2Fsignin-sflep&response_type=code&scope=openid%20profile%20email%20phone%20address&code_challenge={code_challenge}&code_challenge_method=S256&state={state}&x-client-SKU=ID_NET472&x-client-ver=6.32.1.0"
-            # 获取回调url
-            print("登录中...", end='')
-            while True:
-                msg = generate_cipher_text(pwd)
-
-                form_data = {
-                    "rturl": rturl,
-                    "account": user,
-                    "pwd": str(msg[0]),
-                    "ts": str(msg[1])
-                }
-                if("帐号或密码错误" in session.post("https://sso.sflep.com/idsvr/account/login", data=form_data).text):
-                    print("\n帐号或密码错误！")
-                    exit(0)
-                session.get(
-                    "https://welearn.sflep.com/user/prelogin.aspx?loginret=http://welearn.sflep.com/user/loginredirect.aspx")
-                # 登录
-
-                response = session.get("https://welearn.sflep.com/student/index.aspx")
-                if "WE Learn 随行课堂" in response.text:
-                    print(f"\n登录成功！")
-                    return session
-                print(".", end='')
-        except:
-            print("错误返回,登录失败！")
+    try:
+        response = requests.get(
+            "https://welearn.sflep.com/user/prelogin.aspx?loginret=http://welearn.sflep.com/user/loginredirect.aspx",
+            allow_redirects=False)
+        rturl = response.headers['Location'].replace(
+            'https://sso.sflep.com/idsvr', '')
+        # 获取回调url
+        print("登录中...", end='')
+        form_data = {
+            "rturl": rturl,
+            "account": user,
+            "pwd": pwd
+        }
+        session.post("https://sso.sflep.com/idsvr/account/login", data=form_data)
+        url = 'https://sso.sflep.com/idsvr' + rturl
+        res = session.get(url)
+        print(res.text)
+        if "localStorage.setItem('authToken'" in res.text:
+            print("登录成功!!")
+        else:
+            input("登录失败!!")
             exit(0)
+    except:
+        print("错误返回,登录失败！")
+        exit(0)
+
+
 # ---------以上修改---------------------
 
 
@@ -170,7 +145,7 @@ def input_time():
     print("\n\n")
 
     input_ = input("请严格按照以上格式输入: ")
-    if(',' in input_):
+    if (',' in input_):
         try:
             targetTime = [int(temp) for temp in input_.split(',')]
         except:
@@ -194,7 +169,7 @@ def generate_learning_time():
 def output_results():
     print('运行结束!!\n错误:', len(errors), '个')
     for index, error in enumerate(errors, start=1):
-        print(f"第{index}个错误:{ error}")
+        print(f"第{index}个错误:{error}")
 
     print("\n\n")
     print(dedent('''\
@@ -234,7 +209,7 @@ async def simulate(learningTime: int, chapter: Dict):
         headers=commonHeaders
     )
 
-    if('学习数据不正确' in response.text):  # 重试
+    if ('学习数据不正确' in response.text):  # 重试
         await asyncio.sleep(REQUEST_INTERVAL)
 
         response = session.post(
@@ -254,13 +229,13 @@ async def simulate(learningTime: int, chapter: Dict):
             headers=commonHeaders
         )
 
-        if('学习数据不正确' in response.text):
+        if ('学习数据不正确' in response.text):
             print('\n错误:', chapter['location'])
             errors.append(chapter['location'])
             return
 
     returnJson = response.json()['comment']
-    if('cmi' in returnJson):
+    if ('cmi' in returnJson):
         cmi = json.loads(returnJson)['cmi']
 
         crate = cmi['score']['scaled']
@@ -290,7 +265,7 @@ async def simulate(learningTime: int, chapter: Dict):
     for currentTime in range(1, learningTime + 1):
         await asyncio.sleep(1)
 
-        if(currentTime % 60 == 0):
+        if (currentTime % 60 == 0):
             session.post(
                 AJAX_URL,
                 data={
@@ -319,9 +294,10 @@ async def simulate(learningTime: int, chapter: Dict):
 
 async def heartbeat():
     startTime = time.time()
-    for _ in range(maxLearningTime+4*REQUEST_INTERVAL):
+    for _ in range(maxLearningTime + 4 * REQUEST_INTERVAL):
         print(
-            f"""\r预计学习时长 : {maxLearningTime+4*REQUEST_INTERVAL} 已学习时长 : {int(time.time()-startTime)}""", end="")
+            f"""\r预计学习时长 : {maxLearningTime + 4 * REQUEST_INTERVAL} 已学习时长 : {int(time.time() - startTime)}""",
+            end="")
         await asyncio.sleep(HEARTBEAT_INTERVAL)
 
 
@@ -333,11 +309,11 @@ async def watcher():
         choose_unit()
         input_time()
 
-        if(unitIndex == 0):
+        if (unitIndex == 0):
             startIndex = 0
             endIndex = len(courseInfo)
         else:
-            startIndex = unitIndex-1
+            startIndex = unitIndex - 1
             endIndex = unitIndex
 
         tasks = []
@@ -379,10 +355,10 @@ async def main():
         watcher()
     )
 
+
 def welearn_time_run():
     user = input("请输入用户名=>")
     pwd = input("请输入密码=>")
-
     login(user, pwd)
     asyncio.run(main())
     output_results()
